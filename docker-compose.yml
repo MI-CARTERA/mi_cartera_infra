@@ -1,0 +1,313 @@
+version: "3.9"
+
+name: mi_cartera
+
+services:
+  rabbitmq:
+    image: rabbitmq:3-management
+    container_name: rabbitmq
+    restart: always
+    environment:
+      RABBITMQ_DEFAULT_USER: ${RABBITMQ_USER}
+      RABBITMQ_DEFAULT_PASS: ${RABBITMQ_PASS}
+    ports:
+      - "5672:5672"     # AMQP
+      - "15672:15672"   # UI
+    healthcheck:
+      test: ["CMD", "rabbitmqctl", "status"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+    networks:
+      - backend
+    volumes:
+      - rabbitmq_data:/var/lib/rabbitmq
+
+  redis:
+    image: redis:7
+    container_name: redis
+    restart: always
+    ports:
+      - "6379:6379"   # opcional exponer (dev)
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 3s
+      retries: 10
+    networks:
+      - backend
+    volumes:
+      - redis_data:/data
+
+  postgres:
+    image: postgres:16
+    container_name: postgres
+    restart: always
+    environment:
+      POSTGRES_USER: ${POSTGRES_ROOT_USER}
+      POSTGRES_PASSWORD: ${POSTGRES_ROOT_PASS}
+    ports:
+      - "5432:5432"   # opcional exponer (dev)
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_ROOT_USER}"]
+      interval: 10s
+      timeout: 5s
+      retries: 20
+    networks:
+      - backend
+    volumes:
+      - pg_data:/var/lib/postgresql/data
+      - ./postgres/init:/docker-entrypoint-initdb.d:ro
+
+  api_gateway:
+    # Si tu gateway es Spring Boot:
+    build:
+      context: ../api_gateway
+      dockerfile: Dockerfile
+    container_name: api_gateway
+    restart: always
+    ports:
+      - "8080:8080"
+    environment:
+      RABBITMQ_URL: amqp://${RABBITMQ_USER}:${RABBITMQ_PASS}@rabbitmq:5672
+      REDIS_HOST: redis
+      REDIS_PORT: 6379
+      # si gateway valida JWT:
+      # JWT_PUBLIC_KEY: ...
+    depends_on:
+      rabbitmq:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    networks:
+      - public
+      - backend
+
+  frontend:
+    build:
+      context: ../frontend
+      dockerfile: Dockerfile
+    container_name: frontend
+    restart: always
+    ports:
+      - "5173:5173"
+    environment:
+      VITE_API_BASE_URL: http://localhost:8080
+    depends_on:
+      - api_gateway
+    networks:
+      - public
+
+  # ---------- Microservicios (Spring Boot) ----------
+  ms_users:
+    build: ../ms_users
+    container_name: ms_users
+    restart: always
+    ports:
+      - "8101:8080"
+    environment:
+      SPRING_DATASOURCE_URL: jdbc:postgresql://postgres:5432/ms_users
+      SPRING_DATASOURCE_USERNAME: ms_users
+      SPRING_DATASOURCE_PASSWORD: ms_users
+      RABBITMQ_URL: amqp://${RABBITMQ_USER}:${RABBITMQ_PASS}@rabbitmq:5672
+      REDIS_HOST: redis
+      REDIS_PORT: 6379
+    depends_on:
+      postgres:
+        condition: service_healthy
+      rabbitmq:
+        condition: service_healthy
+    networks:
+      - backend
+
+  ms_bank_accounts:
+    build: ../ms_bank_accounts
+    container_name: ms_bank_accounts
+    restart: always
+    ports:
+      - "8102:8080"
+    environment:
+      SPRING_DATASOURCE_URL: jdbc:postgresql://postgres:5432/ms_bank_accounts
+      SPRING_DATASOURCE_USERNAME: ms_bank_accounts
+      SPRING_DATASOURCE_PASSWORD: ms_bank_accounts
+      RABBITMQ_URL: amqp://${RABBITMQ_USER}:${RABBITMQ_PASS}@rabbitmq:5672
+      REDIS_HOST: redis
+      REDIS_PORT: 6379
+    depends_on:
+      postgres:
+        condition: service_healthy
+      rabbitmq:
+        condition: service_healthy
+    networks:
+      - backend
+
+  ms_files:
+    build: ../ms_files
+    container_name: ms_files
+    restart: always
+    ports:
+      - "8103:8080"
+    environment:
+      SPRING_DATASOURCE_URL: jdbc:postgresql://postgres:5432/ms_files
+      SPRING_DATASOURCE_USERNAME: ms_files
+      SPRING_DATASOURCE_PASSWORD: ms_files
+      RABBITMQ_URL: amqp://${RABBITMQ_USER}:${RABBITMQ_PASS}@rabbitmq:5672
+      # storage local (dev):
+      FILE_STORAGE_PATH: /data/files
+    depends_on:
+      postgres:
+        condition: service_healthy
+      rabbitmq:
+        condition: service_healthy
+    networks:
+      - backend
+    volumes:
+      - files_data:/data/files
+
+  ms_transactions:
+    build: ../ms_transactions
+    container_name: ms_transactions
+    restart: always
+    ports:
+      - "8104:8080"
+    environment:
+      SPRING_DATASOURCE_URL: jdbc:postgresql://postgres:5432/ms_transactions
+      SPRING_DATASOURCE_USERNAME: ms_transactions
+      SPRING_DATASOURCE_PASSWORD: ms_transactions
+      RABBITMQ_URL: amqp://${RABBITMQ_USER}:${RABBITMQ_PASS}@rabbitmq:5672
+    depends_on:
+      postgres:
+        condition: service_healthy
+      rabbitmq:
+        condition: service_healthy
+    networks:
+      - backend
+
+  ms_expenses:
+    build: ../ms_expenses
+    container_name: ms_expenses
+    restart: always
+    ports:
+      - "8105:8080"
+    environment:
+      SPRING_DATASOURCE_URL: jdbc:postgresql://postgres:5432/ms_expenses
+      SPRING_DATASOURCE_USERNAME: ms_expenses
+      SPRING_DATASOURCE_PASSWORD: ms_expenses
+      RABBITMQ_URL: amqp://${RABBITMQ_USER}:${RABBITMQ_PASS}@rabbitmq:5672
+    depends_on:
+      postgres:
+        condition: service_healthy
+      rabbitmq:
+        condition: service_healthy
+    networks:
+      - backend
+
+  ms_cash:
+    build: ../ms_cash
+    container_name: ms_cash
+    restart: always
+    ports:
+      - "8106:8080"
+    environment:
+      SPRING_DATASOURCE_URL: jdbc:postgresql://postgres:5432/ms_cash
+      SPRING_DATASOURCE_USERNAME: ms_cash
+      SPRING_DATASOURCE_PASSWORD: ms_cash
+      RABBITMQ_URL: amqp://${RABBITMQ_USER}:${RABBITMQ_PASS}@rabbitmq:5672
+    depends_on:
+      postgres:
+        condition: service_healthy
+      rabbitmq:
+        condition: service_healthy
+    networks:
+      - backend
+
+  ms_saves:
+    build: ../ms_saves
+    container_name: ms_saves
+    restart: always
+    ports:
+      - "8107:8080"
+    environment:
+      SPRING_DATASOURCE_URL: jdbc:postgresql://postgres:5432/ms_saves
+      SPRING_DATASOURCE_USERNAME: ms_saves
+      SPRING_DATASOURCE_PASSWORD: ms_saves
+      RABBITMQ_URL: amqp://${RABBITMQ_USER}:${RABBITMQ_PASS}@rabbitmq:5672
+    depends_on:
+      postgres:
+        condition: service_healthy
+      rabbitmq:
+        condition: service_healthy
+    networks:
+      - backend
+
+  ms_investments:
+    build: ../ms_investments
+    container_name: ms_investments
+    restart: always
+    ports:
+      - "8108:8080"
+    environment:
+      SPRING_DATASOURCE_URL: jdbc:postgresql://postgres:5432/ms_investments
+      SPRING_DATASOURCE_USERNAME: ms_investments
+      SPRING_DATASOURCE_PASSWORD: ms_investments
+      RABBITMQ_URL: amqp://${RABBITMQ_USER}:${RABBITMQ_PASS}@rabbitmq:5672
+    depends_on:
+      postgres:
+        condition: service_healthy
+      rabbitmq:
+        condition: service_healthy
+    networks:
+      - backend
+
+  ms_goals:
+    build: ../ms_goals
+    container_name: ms_goals
+    restart: always
+    ports:
+      - "8109:8080"
+    environment:
+      SPRING_DATASOURCE_URL: jdbc:postgresql://postgres:5432/ms_goals
+      SPRING_DATASOURCE_USERNAME: ms_goals
+      SPRING_DATASOURCE_PASSWORD: ms_goals
+      RABBITMQ_URL: amqp://${RABBITMQ_USER}:${RABBITMQ_PASS}@rabbitmq:5672
+    depends_on:
+      postgres:
+        condition: service_healthy
+      rabbitmq:
+        condition: service_healthy
+    networks:
+      - backend
+
+  ms_ai_classifier:
+    build: ../ms_ai_classifier
+    container_name: ms_ai_classifier
+    restart: always
+    ports:
+      - "8110:8080"
+    environment:
+      # si querés DB para guardar reglas/embeddings:
+      SPRING_DATASOURCE_URL: jdbc:postgresql://postgres:5432/ms_ai_classifier
+      SPRING_DATASOURCE_USERNAME: ms_ai_classifier
+      SPRING_DATASOURCE_PASSWORD: ms_ai_classifier
+      RABBITMQ_URL: amqp://${RABBITMQ_USER}:${RABBITMQ_PASS}@rabbitmq:5672
+      OPENAI_API_KEY: ${OPENAI_API_KEY}
+    depends_on:
+      postgres:
+        condition: service_healthy
+      rabbitmq:
+        condition: service_healthy
+    networks:
+      - backend
+
+networks:
+  public:
+    driver: bridge
+  backend:
+    driver: bridge
+    internal: true
+
+volumes:
+  rabbitmq_data:
+  redis_data:
+  pg_data:
+  files_data:
