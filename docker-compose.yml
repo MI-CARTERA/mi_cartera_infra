@@ -62,7 +62,7 @@ services:
   api_gateway:
     # Si tu gateway es Spring Boot:
     build:
-      context: ../api_gateway
+      context: ./api_gateway
       dockerfile: Dockerfile
     container_name: api_gateway
     restart: always
@@ -85,7 +85,7 @@ services:
 
   frontend:
     build:
-      context: ../frontend
+      context: ./frontend
       dockerfile: Dockerfile
     container_name: frontend
     restart: always
@@ -100,7 +100,7 @@ services:
 
   # ---------- Microservicios (Spring Boot) ----------
   ms_users:
-    build: ../ms_users
+    build: ./ms_users
     container_name: ms_users
     restart: always
     ports:
@@ -121,7 +121,7 @@ services:
       - backend
 
   ms_bank_accounts:
-    build: ../ms_bank_accounts
+    build: ./ms_bank_accounts
     container_name: ms_bank_accounts
     restart: always
     ports:
@@ -142,7 +142,7 @@ services:
       - backend
 
   ms_files:
-    build: ../ms_files
+    build: ./ms_files
     container_name: ms_files
     restart: always
     ports:
@@ -165,7 +165,7 @@ services:
       - files_data:/data/files
 
   ms_transactions:
-    build: ../ms_transactions
+    build: ./ms_transactions
     container_name: ms_transactions
     restart: always
     ports:
@@ -184,7 +184,7 @@ services:
       - backend
 
   ms_expenses:
-    build: ../ms_expenses
+    build: ./ms_expenses
     container_name: ms_expenses
     restart: always
     ports:
@@ -203,7 +203,7 @@ services:
       - backend
 
   ms_cash:
-    build: ../ms_cash
+    build: ./ms_cash
     container_name: ms_cash
     restart: always
     ports:
@@ -222,7 +222,7 @@ services:
       - backend
 
   ms_saves:
-    build: ../ms_saves
+    build: ./ms_saves
     container_name: ms_saves
     restart: always
     ports:
@@ -241,7 +241,7 @@ services:
       - backend
 
   ms_investments:
-    build: ../ms_investments
+    build: ./ms_investments
     container_name: ms_investments
     restart: always
     ports:
@@ -260,7 +260,7 @@ services:
       - backend
 
   ms_goals:
-    build: ../ms_goals
+    build: ./ms_goals
     container_name: ms_goals
     restart: always
     ports:
@@ -279,7 +279,7 @@ services:
       - backend
 
   ms_ai_classifier:
-    build: ../ms_ai_classifier
+    build: ./ms_ai_classifier
     container_name: ms_ai_classifier
     restart: always
     ports:
