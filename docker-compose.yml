@@ -1,24 +1,23 @@
-version: "3.9"
 
 name: mi_cartera
 
 services:
   rabbitmq:
     image: rabbitmq:3-management
-    container_name: rabbitmq
     restart: always
     environment:
       RABBITMQ_DEFAULT_USER: ${RABBITMQ_USER}
       RABBITMQ_DEFAULT_PASS: ${RABBITMQ_PASS}
     ports:
-      - "5672:5672"     # AMQP
-      - "15672:15672"   # UI
+      - "5672:5672"
+      - "15672:15672"
     healthcheck:
       test: ["CMD", "rabbitmqctl", "status"]
       interval: 10s
       timeout: 5s
       retries: 10
     networks:
+      - public
       - backend
     volumes:
       - rabbitmq_data:/var/lib/rabbitmq
