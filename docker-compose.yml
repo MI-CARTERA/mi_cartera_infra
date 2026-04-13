@@ -322,6 +322,32 @@ services:
     networks:
       - backend
 
+  ms_notifications_cartera:
+    build: ./ms_notifications_cartera
+    container_name: ms_notifications_cartera
+    restart: always
+    ports:
+      - "8111:8080"
+    environment:
+      SPRING_DATASOURCE_URL: jdbc:postgresql://postgres:5432/ms_notifications_cartera
+      SPRING_DATASOURCE_USERNAME: ${POSTGRES_ROOT_USER}
+      SPRING_DATASOURCE_PASSWORD: ${POSTGRES_ROOT_PASS}
+      SPRING_RABBITMQ_HOST: rabbitmq
+      SPRING_RABBITMQ_PORT: 5672
+      SPRING_RABBITMQ_USERNAME: ${RABBITMQ_USER}
+      SPRING_RABBITMQ_PASSWORD: ${RABBITMQ_PASS}
+      SPRING_DATA_REDIS_HOST: redis
+      SPRING_DATA_REDIS_PORT: 6379
+    depends_on:
+      postgres:
+        condition: service_healthy
+      rabbitmq:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    networks:
+      - backend
+
   ms_ai_classifier:
     build: ./ms_ai_classifier
     container_name: ms_ai_classifier
