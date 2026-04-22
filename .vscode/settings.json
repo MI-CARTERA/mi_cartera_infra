@@ -1,0 +1,5 @@
+{
+    "java.project.sourcePaths": [
+        "api_gateway/src/main/java"
+    ]
+}
