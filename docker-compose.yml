@@ -75,8 +75,8 @@ services:
       RABBITMQ_URL: amqp://${RABBITMQ_USER}:${RABBITMQ_PASS}@rabbitmq:5672
       REDIS_HOST: redis
       REDIS_PORT: 6379
-      # si gateway valida JWT:
-      # JWT_PUBLIC_KEY: ...
+      # reverse proxy valida JWT:
+      JWT_SECRET: ${JWT_SECRET}
     depends_on:
       rabbitmq:
         condition: service_healthy
@@ -126,7 +126,9 @@ services:
       redis:
         condition: service_healthy
     networks:
-      - backend
+       backend:
+        aliases:
+          - ms-users
 
   ms_bank_accounts:
     build: ./ms_bank_accounts
@@ -147,7 +149,9 @@ services:
       rabbitmq:
         condition: service_healthy
     networks:
-      - backend
+       backend:
+        aliases:
+          - ms-bank-accounts
 
   ms_files:
     build: ./ms_files
@@ -168,7 +172,9 @@ services:
       rabbitmq:
         condition: service_healthy
     networks:
-      - backend
+       backend:
+        aliases:
+          - ms-files
     volumes:
       - files_data:/data/files
 
@@ -189,7 +195,9 @@ services:
       rabbitmq:
         condition: service_healthy
     networks:
-      - backend
+       backend:
+        aliases:
+          - ms-transactions
 
   ms_expenses:
     build: ./ms_expenses
@@ -215,7 +223,9 @@ services:
       redis:
         condition: service_healthy
     networks:
-      - backend
+       backend:
+        aliases:
+          - ms-expenses
 
   ms_cash:
     build: ./ms_cash
@@ -242,7 +252,9 @@ services:
       redis:
         condition: service_healthy
     networks:
-      - backend
+       backend:
+        aliases:
+          - ms-cash
 
   ms_saves:
     build: ./ms_saves
@@ -268,7 +280,9 @@ services:
       redis:
         condition: service_healthy
     networks:
-      - backend
+       backend:
+        aliases:
+          - ms-saves
 
   ms_investments:
     build: ./ms_investments
@@ -294,7 +308,9 @@ services:
       redis:
         condition: service_healthy
     networks:
-      - backend
+       backend:
+        aliases:
+          - ms-investments
 
   ms_goals:
     build: ./ms_goals
@@ -320,7 +336,9 @@ services:
       redis:
         condition: service_healthy
     networks:
-      - backend
+       backend:
+        aliases:
+          - ms-goals
 
   ms_notifications_cartera:
     build: ./ms_notifications_cartera
@@ -346,7 +364,9 @@ services:
       redis:
         condition: service_healthy
     networks:
-      - backend
+       backend:
+        aliases:
+          - ms-notifications-cartera
 
   ms_ai_classifier:
     build: ./ms_ai_classifier
@@ -367,7 +387,9 @@ services:
       rabbitmq:
         condition: service_healthy
     networks:
-      - backend
+       backend:
+        aliases:
+          - ms-ai-classifier
 
 networks:
   public:
