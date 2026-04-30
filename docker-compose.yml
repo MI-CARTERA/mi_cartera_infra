@@ -72,7 +72,10 @@ services:
     ports:
       - "8080:8080"
     environment:
-      RABBITMQ_URL: amqp://${RABBITMQ_USER}:${RABBITMQ_PASS}@rabbitmq:5672
+      SPRING_RABBITMQ_HOST: rabbitmq
+      SPRING_RABBITMQ_PORT: 5672
+      SPRING_RABBITMQ_USERNAME: ${RABBITMQ_USER}
+      SPRING_RABBITMQ_PASSWORD: ${RABBITMQ_PASS}
       REDIS_HOST: redis
       REDIS_PORT: 6379
       # reverse proxy valida JWT:
@@ -164,10 +167,16 @@ services:
     ports:
       - "8103:8080"
     environment:
+      SPRING_PROFILES_ACTIVE: docker
       SPRING_DATASOURCE_URL: jdbc:postgresql://postgres:5432/ms_files
       SPRING_DATASOURCE_USERNAME: ms_files
       SPRING_DATASOURCE_PASSWORD: ms_files
-      RABBITMQ_URL: amqp://${RABBITMQ_USER}:${RABBITMQ_PASS}@rabbitmq:5672
+      SPRING_RABBITMQ_HOST: rabbitmq
+      SPRING_RABBITMQ_PORT: 5672
+      SPRING_RABBITMQ_USERNAME: ${RABBITMQ_USER}
+      SPRING_RABBITMQ_PASSWORD: ${RABBITMQ_PASS}
+      SPRING_DATA_REDIS_HOST: redis
+      SPRING_DATA_REDIS_PORT: 6379
       # storage local (dev):
       FILE_STORAGE_PATH: /data/files
     depends_on:
@@ -189,10 +198,16 @@ services:
     ports:
       - "8104:8080"
     environment:
+      SPRING_PROFILES_ACTIVE: docker
       SPRING_DATASOURCE_URL: jdbc:postgresql://postgres:5432/ms_transactions
       SPRING_DATASOURCE_USERNAME: ms_transactions
       SPRING_DATASOURCE_PASSWORD: ms_transactions
-      RABBITMQ_URL: amqp://${RABBITMQ_USER}:${RABBITMQ_PASS}@rabbitmq:5672
+      SPRING_RABBITMQ_HOST: rabbitmq
+      SPRING_RABBITMQ_PORT: 5672
+      SPRING_RABBITMQ_USERNAME: ${RABBITMQ_USER}
+      SPRING_RABBITMQ_PASSWORD: ${RABBITMQ_PASS}
+      SPRING_DATA_REDIS_HOST: redis
+      SPRING_DATA_REDIS_PORT: 6379
     depends_on:
       postgres:
         condition: service_healthy
@@ -383,7 +398,10 @@ services:
       SPRING_DATASOURCE_URL: jdbc:postgresql://postgres:5432/ms_ai_classifier
       SPRING_DATASOURCE_USERNAME: ms_ai_classifier
       SPRING_DATASOURCE_PASSWORD: ms_ai_classifier
-      RABBITMQ_URL: amqp://${RABBITMQ_USER}:${RABBITMQ_PASS}@rabbitmq:5672
+      SPRING_RABBITMQ_HOST: rabbitmq
+      SPRING_RABBITMQ_PORT: 5672
+      SPRING_RABBITMQ_USERNAME: ${RABBITMQ_USER}
+      SPRING_RABBITMQ_PASSWORD: ${RABBITMQ_PASS}
       OPENAI_API_KEY: ${OPENAI_API_KEY}
     depends_on:
       postgres:
