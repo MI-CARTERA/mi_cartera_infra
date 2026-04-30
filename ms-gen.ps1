@@ -213,12 +213,6 @@ spring:
 
   profiles:
     active: `${SPRING_PROFILES_ACTIVE:default}
-
-management:
-  endpoints:
-    web:
-      exposure:
-        include: health,info,prometheus
 "@
 
 if ($Bd -eq "mysql") {
@@ -272,6 +266,12 @@ $appYmlContent += @"
     redis:
       host: `${SPRING_DATA_REDIS_HOST}
       port: `${SPRING_DATA_REDIS_PORT}
+
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,info,prometheus
 "@
 
 Write-Utf8NoBomFile -Path $appYml -Content $appYmlContent
@@ -281,9 +281,85 @@ $appDockerYml = Join-Path $srcRes "application-docker.yml"
 
 $appDockerYmlContent = @"
 spring:
-  profiles:
-    active: docker
+  rabbitmq:
+    host: `${SPRING_RABBITMQ_HOST:rabbitmq}
+    port: `${SPRING_RABBITMQ_PORT:5672}
+    username: `${SPRING_RABBITMQ_USERNAME}
+    password: `${SPRING_RABBITMQ_PASSWORD}
+
+  data:
+    redis:
+      host: `${SPRING_DATA_REDIS_HOST:redis}
+      port: `${SPRING_DATA_REDIS_PORT:6379}
 "@
+
+if ($Bd -eq "mysql") {
+  $appDockerYmlContent = @"
+spring:
+  datasource:
+    url: `${SPRING_DATASOURCE_URL:jdbc:mysql://db_${Artifact}:3306/${Artifact}?useSSL=false&serverTimezone=UTC}
+    username: `${SPRING_DATASOURCE_USERNAME}
+    password: `${SPRING_DATASOURCE_PASSWORD}
+
+  jpa:
+    hibernate:
+      ddl-auto: `${SPRING_JPA_HIBERNATE_DDL_AUTO:update}
+    open-in-view: false
+
+  rabbitmq:
+    host: `${SPRING_RABBITMQ_HOST:rabbitmq}
+    port: `${SPRING_RABBITMQ_PORT:5672}
+    username: `${SPRING_RABBITMQ_USERNAME}
+    password: `${SPRING_RABBITMQ_PASSWORD}
+
+  data:
+    redis:
+      host: `${SPRING_DATA_REDIS_HOST:redis}
+      port: `${SPRING_DATA_REDIS_PORT:6379}
+"@
+}
+elseif ($Bd -eq "postgres") {
+  $appDockerYmlContent = @"
+spring:
+  datasource:
+    url: `${SPRING_DATASOURCE_URL:jdbc:postgresql://postgres:5432/${Artifact}}
+    username: `${SPRING_DATASOURCE_USERNAME}
+    password: `${SPRING_DATASOURCE_PASSWORD}
+
+  jpa:
+    hibernate:
+      ddl-auto: `${SPRING_JPA_HIBERNATE_DDL_AUTO:update}
+    open-in-view: false
+
+  rabbitmq:
+    host: `${SPRING_RABBITMQ_HOST:rabbitmq}
+    port: `${SPRING_RABBITMQ_PORT:5672}
+    username: `${SPRING_RABBITMQ_USERNAME}
+    password: `${SPRING_RABBITMQ_PASSWORD}
+
+  data:
+    redis:
+      host: `${SPRING_DATA_REDIS_HOST:redis}
+      port: `${SPRING_DATA_REDIS_PORT:6379}
+"@
+}
+elseif ($Bd -eq "mongo") {
+  $appDockerYmlContent = @"
+spring:
+  data:
+    mongodb:
+      uri: `${SPRING_DATA_MONGODB_URI:mongodb://mongo:27017/${Artifact}}
+    redis:
+      host: `${SPRING_DATA_REDIS_HOST:redis}
+      port: `${SPRING_DATA_REDIS_PORT:6379}
+
+  rabbitmq:
+    host: `${SPRING_RABBITMQ_HOST:rabbitmq}
+    port: `${SPRING_RABBITMQ_PORT:5672}
+    username: `${SPRING_RABBITMQ_USERNAME}
+    password: `${SPRING_RABBITMQ_PASSWORD}
+"@
+}
 
 Write-Utf8NoBomFile -Path $appDockerYml -Content $appDockerYmlContent
 
