@@ -2,7 +2,7 @@ param(
   [Parameter(Mandatory=$true)][string]$ProjectDir,                 # C:\dev\ms-clientes
   [Parameter(Mandatory=$true)][string]$BasePackage,                # com.tuorg.msclientes
   [Parameter(Mandatory=$true)][string]$Entity,                     # Cliente
-  [Parameter(Mandatory=$true)][ValidateSet("mysql","mongo")][string]$Bd,
+  [Parameter(Mandatory=$true)][ValidateSet("postgres","mysql","mongo")][string]$Bd,
   [Parameter(Mandatory=$false)][string]$IdType = "Long",           # Long | UUID | String
   [Parameter(Mandatory=$false)][string]$Fields = "nombre:String"   # "nombre:String,email:String,edad:Integer"
 )
@@ -12,6 +12,16 @@ $ErrorActionPreference = "Stop"
 
 function Ensure-Dir($p){ if(!(Test-Path $p)){ New-Item -ItemType Directory -Path $p | Out-Null } }
 
+function Write-Utf8NoBomFile([string]$Path, [string]$Content) {
+  $dir = Split-Path -Parent $Path
+  if ($dir -and !(Test-Path $dir)) {
+    New-Item -ItemType Directory -Path $dir -Force | Out-Null
+  }
+
+  $utf8NoBom = New-Object System.Text.UTF8Encoding($false)
+  [System.IO.File]::WriteAllText($Path, $Content, $utf8NoBom)
+}
+
 function Upper1([string]$s){
   if(!$s -or $s.Length -eq 0){ return $s }
   return $s.Substring(0,1).ToUpper() + $s.Substring(1)
@@ -20,6 +30,28 @@ function Upper1([string]$s){
 function Lower1([string]$s){
   if(!$s -or $s.Length -eq 0){ return $s }
   return $s.Substring(0,1).ToLower() + $s.Substring(1)
+}
+
+function To-KebabCase([string]$s) {
+  if(!$s -or $s.Length -eq 0){ return $s }
+  return ([regex]::Replace($s, '([a-z0-9])([A-Z])', '$1-$2')).ToLower()
+}
+
+function Get-JavaTypeImports([string[]]$Types) {
+  $imports = New-Object System.Collections.Generic.HashSet[string]
+
+  foreach($type in $Types){
+    switch ($type) {
+      "BigDecimal" { [void]$imports.Add("import java.math.BigDecimal;") }
+      "LocalDate" { [void]$imports.Add("import java.time.LocalDate;") }
+      "LocalDateTime" { [void]$imports.Add("import java.time.LocalDateTime;") }
+      "Instant" { [void]$imports.Add("import java.time.Instant;") }
+      "OffsetDateTime" { [void]$imports.Add("import java.time.OffsetDateTime;") }
+      "UUID" { [void]$imports.Add("import java.util.UUID;") }
+    }
+  }
+
+  return @($imports | Sort-Object)
 }
 
 # Parse fields
@@ -35,6 +67,8 @@ foreach($f in $Fields.Split(",")){
 $entityName = Upper1 $Entity
 $entityVar  = Lower1 $Entity
 $basePkg    = $BasePackage
+$allJavaTypes = @($IdType) + @($fieldList | ForEach-Object { $_.Type })
+$typeImports = Get-JavaTypeImports $allJavaTypes
 
 $srcMainJava = Join-Path $ProjectDir ("src\main\java\" + $basePkg.Replace(".","\"))
 if(!(Test-Path $srcMainJava)){
@@ -55,11 +89,12 @@ Ensure-Dir (Join-Path $featureRoot "infrastructure")
 Ensure-Dir (Join-Path $featureRoot "api\dto")
 
 # ---------- DOMAIN (Entity/Document) ----------
-$ann = if($Bd -eq "mysql"){"@Entity`n@Table(name = `"$($entityVar)s`")"} else {"@Document(collection = `"$($entityVar)s`")"}
+$isRelational = $Bd -in @("postgres", "mysql")
+$ann = if($isRelational){"@Entity`n@Table(name = `"$($entityVar)s`")"} else {"@Document(collection = `"$($entityVar)s`")"}
 $imports = @(
   "import lombok.*;"
 )
-if($Bd -eq "mysql"){
+if($isRelational){
   $imports += @(
     "import jakarta.persistence.*;"
   )
@@ -69,9 +104,10 @@ if($Bd -eq "mysql"){
     "import org.springframework.data.mongodb.core.mapping.Document;"
   )
 }
+$imports += $typeImports
 
 # id annotation
-$idDecl = if($Bd -eq "mysql"){
+$idDecl = if($isRelational){
   if($IdType -eq "Long"){
     "  @Id`n  @GeneratedValue(strategy = GenerationType.IDENTITY)`n  private Long id;"
   } else {
@@ -102,13 +138,14 @@ $fieldsDecl
 "@
 
 $entityPath = Join-Path $featureRoot "domain\$entityName.java"
-$entityJava | Set-Content -Encoding UTF8 $entityPath
+Write-Utf8NoBomFile -Path $entityPath -Content $entityJava
 
 # ---------- DTOs ----------
 $dtoImports = @(
   "import lombok.*;",
   "import jakarta.validation.constraints.*;"
 )
+$dtoImports += $typeImports
 
 $createFields = ($fieldList | ForEach-Object { "  private $($_.Type) $($_.Name);" }) -join "`n"
 $updateFields = $createFields
@@ -146,6 +183,7 @@ $dtoResp = @"
 package $basePkg.$entityVar.api.dto;
 
 import lombok.*;
+$($typeImports -join "`n")
 
 @Data
 @NoArgsConstructor
@@ -157,17 +195,18 @@ $responseFields
 "@
 
 $dtoDir = Join-Path $featureRoot "api\dto"
-$dtoCreate | Set-Content -Encoding UTF8 (Join-Path $dtoDir "${entityName}CreateRequest.java")
-$dtoUpdate | Set-Content -Encoding UTF8 (Join-Path $dtoDir "${entityName}UpdateRequest.java")
-$dtoResp   | Set-Content -Encoding UTF8 (Join-Path $dtoDir "${entityName}Response.java")
+Write-Utf8NoBomFile -Path (Join-Path $dtoDir "${entityName}CreateRequest.java") -Content $dtoCreate
+Write-Utf8NoBomFile -Path (Join-Path $dtoDir "${entityName}UpdateRequest.java") -Content $dtoUpdate
+Write-Utf8NoBomFile -Path (Join-Path $dtoDir "${entityName}Response.java") -Content $dtoResp
 
 # ---------- REPOSITORY ----------
-$repoImports = if($Bd -eq "mysql"){
+$repoImports = if($isRelational){
   @("import org.springframework.data.jpa.repository.JpaRepository;")
 } else {
   @("import org.springframework.data.mongodb.repository.MongoRepository;")
 }
-$repoExtends = if($Bd -eq "mysql"){"JpaRepository"} else {"MongoRepository"}
+$repoImports += Get-JavaTypeImports @($IdType)
+$repoExtends = if($isRelational){"JpaRepository"} else {"MongoRepository"}
 
 $repoJava = @"
 package $pkgInfra;
@@ -180,7 +219,7 @@ public interface ${entityName}Repository extends $repoExtends<$entityName, $IdTy
 "@
 
 $repoPath = Join-Path $featureRoot "infrastructure\${entityName}Repository.java"
-$repoJava | Set-Content -Encoding UTF8 $repoPath
+Write-Utf8NoBomFile -Path $repoPath -Content $repoJava
 
 # ---------- SERVICE ----------
 $svcJava = @"
@@ -191,11 +230,16 @@ import $pkgInfra.${entityName}Repository;
 import $basePkg.$entityVar.api.dto.*;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
+import org.springframework.web.server.ResponseStatusException;
+import org.springframework.http.HttpStatus;
+$($(Get-JavaTypeImports @($IdType)) -join "`n")
 
 import java.util.List;
 
 @Service
 @RequiredArgsConstructor
+@Transactional
 public class ${entityName}Service {
 
   private final ${entityName}Repository repository;
@@ -211,19 +255,21 @@ $(
     return toResponse(saved);
   }
 
+  @Transactional(readOnly = true)
   public List<${entityName}Response> list() {
     return repository.findAll().stream().map(this::toResponse).toList();
   }
 
+  @Transactional(readOnly = true)
   public ${entityName}Response get($IdType id) {
     $entityName e = repository.findById(id)
-      .orElseThrow(() -> new RuntimeException("$entityName no encontrado: " + id));
+      .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "$entityName no encontrado: " + id));
     return toResponse(e);
   }
 
   public ${entityName}Response update($IdType id, ${entityName}UpdateRequest req) {
     $entityName e = repository.findById(id)
-      .orElseThrow(() -> new RuntimeException("$entityName no encontrado: " + id));
+      .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "$entityName no encontrado: " + id));
 
 $(
   ($fieldList | ForEach-Object { "    e.set$([string](Upper1 $_.Name))(req.get$([string](Upper1 $_.Name))());" }) -join "`n"
@@ -234,6 +280,9 @@ $(
   }
 
   public void delete($IdType id) {
+    if (!repository.existsById(id)) {
+      throw new ResponseStatusException(HttpStatus.NOT_FOUND, "$entityName no encontrado: " + id);
+    }
     repository.deleteById(id);
   }
 
@@ -249,10 +298,11 @@ $(
 "@
 
 $svcPath = Join-Path $featureRoot "application\${entityName}Service.java"
-$svcJava | Set-Content -Encoding UTF8 $svcPath
+Write-Utf8NoBomFile -Path $svcPath -Content $svcJava
 
 # ---------- CONTROLLER ----------
-$baseRoute = "/" + ($entityVar.ToLower() + "s")
+$controllerImports = Get-JavaTypeImports @($IdType)
+$baseRoute = "/" + ((To-KebabCase $entityVar) + "s")
 $controllerJava = @"
 package $pkgApi;
 
@@ -262,6 +312,7 @@ import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.HttpStatus;
 import org.springframework.web.bind.annotation.*;
+$($controllerImports -join "`n")
 
 import java.util.List;
 
@@ -302,7 +353,7 @@ public class ${entityName}Controller {
 "@
 
 $ctrlPath = Join-Path $featureRoot "api\${entityName}Controller.java"
-$controllerJava | Set-Content -Encoding UTF8 $ctrlPath
+Write-Utf8NoBomFile -Path $ctrlPath -Content $controllerJava
 
 Write-Host "✅ CRUD generado:"
 Write-Host " - $entityPath"
