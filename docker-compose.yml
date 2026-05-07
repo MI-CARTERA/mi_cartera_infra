@@ -395,14 +395,15 @@ services:
       - "8110:8080"
     environment:
       # si querés DB para guardar reglas/embeddings:
-      SPRING_DATASOURCE_URL: jdbc:postgresql://postgres:5432/ms_ai_classifier
-      SPRING_DATASOURCE_USERNAME: ms_ai_classifier
-      SPRING_DATASOURCE_PASSWORD: ms_ai_classifier
-      SPRING_RABBITMQ_HOST: rabbitmq
-      SPRING_RABBITMQ_PORT: 5672
-      SPRING_RABBITMQ_USERNAME: ${RABBITMQ_USER}
-      SPRING_RABBITMQ_PASSWORD: ${RABBITMQ_PASS}
+      APP_ENV: dev
+      DATABASE_URL: postgresql+psycopg://ms_ai_classifier:ms_ai_classifier@postgres:5432/ms_ai_classifier
+      RABBITMQ_URL: amqp://${RABBITMQ_USER}:${RABBITMQ_PASS}@rabbitmq:5672/
+      RABBITMQ_EXCHANGE: mi_cartera_events
+      RABBITMQ_QUEUE: ms_ai_classifier_queue
+      RABBITMQ_ROUTING_KEYS: files.file_uploaded
+      FILES_BASE_PATH: /data/files
       OPENAI_API_KEY: ${OPENAI_API_KEY}
+      OPENAI_MODEL: gpt-5
     depends_on:
       postgres:
         condition: service_healthy
@@ -412,6 +413,8 @@ services:
        backend:
         aliases:
           - ms-ai-classifier
+    volumes:
+      - files_data:/data/files:ro
 
 networks:
   public:

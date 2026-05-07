@@ -1,0 +1,74 @@
+exchange: mi_cartera_events
+version: 1
+
+guidance:
+  source_of_truth: "Keep cross-language event names and payload intent here first."
+  routing_key_style: "lowercase dot notation"
+  event_name_style: "UPPER_SNAKE_CASE"
+  envelope_fields:
+    - event_name
+    - event_version
+    - event_id
+    - occurred_at
+    - producer
+    - correlation_id
+    - causation_id
+    - payload
+
+events:
+  - event_name: FILE_UPLOADED
+    routing_key: files.file_uploaded
+    producer: ms_files
+    consumers:
+      - ms_ai_classifier
+    payload:
+      required:
+        - file_id
+        - user_id
+        - file_name
+        - storage_path
+        - content_type
+        - uploaded_at
+      optional:
+        - bank_account_id
+        - size
+        - storage_provider
+        - statement_hint
+        - source
+
+  - event_name: TRANSACTIONS_CLASSIFIED
+    routing_key: ai.transactions_classified
+    producer: ms_ai_classifier
+    consumers:
+      - ms_transactions
+      - ms_notifications_cartera
+    payload:
+      required:
+        - file_id
+        - user_id
+        - job_id
+        - transactions
+      optional:
+        - bank_account_id
+        - statement_period
+        - currency
+        - extraction_summary
+        - classifier
+
+  - event_name: AI_CLASSIFICATION_FAILED
+    routing_key: ai.classification_failed
+    producer: ms_ai_classifier
+    consumers:
+      - ms_files
+      - ms_notifications_cartera
+    payload:
+      required:
+        - file_id
+        - user_id
+        - job_id
+        - error_code
+        - error_message
+      optional:
+        - bank_account_id
+        - retryable
+        - failure_stage
