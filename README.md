@@ -12,6 +12,7 @@ This repo focuses on:
 - Isolating business capabilities into independent microservices
 - Centralizing access through an API gateway
 - Enabling asynchronous communication through RabbitMQ
+- Defining shared event contracts across services
 - Supporting shared runtime concerns such as Redis, PostgreSQL, networking, and service discovery through Docker DNS
 - Accelerating service creation through automation scripts such as [`ms-gen.ps1`](./ms-gen.ps1) and [`entity-gen.ps1`](./entity-gen.ps1)
 
@@ -21,13 +22,14 @@ The repository currently contains:
 
 - `frontend`: web client
 - `api_gateway`: single entry point for client requests
+- `contracts/events`: shared event contract definitions for cross-service messaging
 - `ms_users`: user management
 - `ms_bank_accounts`: bank account domain
 - `ms_files`: file metadata and file-related API flows
 - `ms_transactions`: financial movements and transactions
 - `ms_goals`: financial goals
 - `ms_notifications_cartera`: notifications
-- `ms_ai_classifier`: AI helper service for transaction or movement classification
+- `ms_ai_classifier`: Python FastAPI service for PDF statement extraction and AI-assisted movement classification
 - `postgres`: database initialization assets
 - `docker-compose.yml`: local orchestration for the whole platform
 
@@ -48,6 +50,25 @@ Frontend
 Microservices
   <-> RabbitMQ events
   <-> Redis cache/runtime data
+```
+
+One of the main event-driven workflows currently being implemented is:
+
+```text
+Frontend
+  -> upload PDF
+ms_files
+  -> stores metadata + storage path
+  -> publishes FILE_UPLOADED
+ms_ai_classifier
+  -> extracts statement movements from PDF
+  -> classifies each movement
+  -> publishes TRANSACTIONS_CLASSIFIED
+ms_transactions
+  -> creates normalized financial records
+ms_notifications_cartera
+  -> notifies downstream channels
+Frontend
 ```
 
 At a high level:
@@ -77,7 +98,7 @@ Routes are defined in [`api_gateway/src/main/resources/gateway-routes.json`](./a
 
 ### Microservices
 
-Each microservice is an independent Spring Boot application with its own container, internal alias, and domain boundary. The current service landscape includes:
+Each microservice is an independent service with its own container, internal alias, and domain boundary. Most services are Spring Boot applications, while `ms_ai_classifier` is implemented in Python with FastAPI. The current service landscape includes:
 
 - `ms_users`: user records and identity-oriented domain logic
 - `ms_bank_accounts`: bank account representation inside the platform
@@ -85,7 +106,7 @@ Each microservice is an independent Spring Boot application with its own contain
 - `ms_transactions`: transaction CRUD and movement-oriented flows
 - `ms_goals`: savings or financial goal tracking
 - `ms_notifications_cartera`: notification management
-- `ms_ai_classifier`: AI-powered classification support
+- `ms_ai_classifier`: PDF ingestion, text extraction, AI classification, and event publication for bank statement movements
 
 ### Data and Infrastructure Services
 
@@ -132,6 +153,18 @@ The architecture supports both patterns:
 
 This combination makes the platform easier to evolve. CRUD and query flows can remain simple over HTTP, while cross-service reactions can be implemented through events when needed.
 
+### Shared Event Contracts
+
+RabbitMQ event names and payload intent are documented in [`contracts/events/mi_cartera_events.yaml`](./contracts/events/mi_cartera_events.yaml).
+
+This repository-level contract is language-agnostic and is intended to be reused by Spring and Python services alike.
+
+The current MVP contract defines:
+
+- `FILE_UPLOADED` with routing key `files.file_uploaded`
+- `TRANSACTIONS_CLASSIFIED` with routing key `ai.transactions_classified`
+- `AI_CLASSIFICATION_FAILED` with routing key `ai.classification_failed`
+
 ## Service Structure and Development Pattern
 
 The generated Java services follow a layered package structure oriented to API readiness:
@@ -144,6 +177,16 @@ The generated Java services follow a layered package structure oriented to API r
 - `common/events`: RabbitMQ configuration, listeners, and publishers
 
 This keeps responsibilities separated and makes the services easier to extend with validations, business rules, integrations, and tests.
+
+`ms_ai_classifier` follows a Python service layout centered on:
+
+- `app/api`: HTTP routes
+- `app/core`: configuration
+- `app/contracts`: mirrored event constants
+- `app/db`, `app/models`, `app/repositories`: persistence
+- `app/messaging`: RabbitMQ consumer and publisher
+- `app/services`: PDF extraction, OpenAI classification, and orchestration
+- `app/schemas`: strict Pydantic contracts
 
 ## Automation and Code Generation
 
@@ -194,15 +237,31 @@ Typical local workflow:
 4. Access backend APIs through `http://localhost:8080`
 5. Use RabbitMQ management on `http://localhost:15672` if needed
 
+For the AI classifier specifically:
+
+- `ms_ai_classifier` is exposed on `8110`
+- it mounts the shared `files_data` volume in read-only mode to read PDFs stored by `ms_files`
+- it requires `OPENAI_API_KEY` for real classification requests
+
 ## Configuration Model
 
 The services rely on environment variables for runtime configuration. Common settings include:
 
 - database URL, user, and password
-- RabbitMQ host, port, user, and password
+- RabbitMQ URL or host, port, user, and password
 - Redis host and port
 - JWT secret for gateway-level auth concerns
 - external API secrets such as `OPENAI_API_KEY` for AI-specific services
+
+`ms_ai_classifier` additionally uses:
+
+- `DATABASE_URL`
+- `RABBITMQ_URL`
+- `RABBITMQ_EXCHANGE`
+- `RABBITMQ_QUEUE`
+- `RABBITMQ_ROUTING_KEYS`
+- `FILES_BASE_PATH`
+- `OPENAI_MODEL`
 
 This keeps the services portable between local development and future deployment environments.
 
@@ -223,6 +282,8 @@ This makes the repository suitable for iterative growth: new services can be add
 
 - The repository already contains the core infrastructure needed for local distributed development
 - Several services are API-ready or scaffolded to become API-ready quickly
+- `ms_ai_classifier` now has an MVP scaffold for RabbitMQ consumption, PDF extraction, OpenAI Structured Outputs classification, and Postgres persistence
+- Shared event names now have a repo-level contract under `contracts/events`
 - Some services referenced in Docker Compose appear to be part of the planned domain map and may still need implementation in this repository
 - The architecture is intentionally modular so authentication, authorization, event choreography, observability, and deployment automation can be expanded later
 
