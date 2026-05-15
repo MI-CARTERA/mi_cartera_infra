@@ -397,6 +397,7 @@ services:
       # si querés DB para guardar reglas/embeddings:
       APP_ENV: dev
       DATABASE_URL: postgresql+psycopg://ms_ai_classifier:ms_ai_classifier@postgres:5432/ms_ai_classifier
+      DATABASE_SCHEMA: ai_classifier
       RABBITMQ_URL: amqp://${RABBITMQ_USER}:${RABBITMQ_PASS}@rabbitmq:5672/
       RABBITMQ_EXCHANGE: mi_cartera_events
       RABBITMQ_QUEUE: ms_ai_classifier_queue
