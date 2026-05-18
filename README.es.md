@@ -62,12 +62,16 @@ ms_files
   -> publica FILE_UPLOADED
 ms_ai_classifier
   -> extrae movimientos del estado de cuenta
-  -> clasifica cada movimiento
+  -> los normaliza
+  -> clasifica cada movimiento con IA
+  -> publica AI_CLASSIFICATION_STARTED / COMPLETED / FAILED
   -> publica TRANSACTIONS_CLASSIFIED
 ms_transactions
   -> crea registros financieros normalizados
+  -> publica TRANSACTIONS_RECORDED
 ms_notifications_cartera
-  -> notifica canales downstream
+  -> guarda notificaciones en PostgreSQL
+  -> las envía al frontend por SSE
 Frontend
 ```
 
@@ -106,7 +110,7 @@ Cada microservicio es un servicio independiente con su propio contenedor, alias 
 - `ms_transactions`: CRUD de transacciones y flujos de movimientos
 - `ms_goals`: seguimiento de metas financieras
 - `ms_notifications_cartera`: gestión de notificaciones
-- `ms_ai_classifier`: ingesta de PDFs, extracción de texto, clasificación con IA y publicación de eventos para movimientos bancarios
+- `ms_ai_classifier`: ingesta de PDFs, extracción, normalización, clasificación con IA, persistencia de jobs y publicación de eventos para movimientos bancarios
 
 ### Servicios de Datos e Infraestructura
 
@@ -163,7 +167,17 @@ El contrato MVP actual define:
 
 - `FILE_UPLOADED` con routing key `files.file_uploaded`
 - `TRANSACTIONS_CLASSIFIED` con routing key `ai.transactions_classified`
+- `TRANSACTIONS_RECORDED` con routing key `transactions.recorded`
+- `AI_CLASSIFICATION_STARTED` con routing key `ai.classification_started`
+- `AI_CLASSIFICATION_COMPLETED` con routing key `ai.classification_completed`
 - `AI_CLASSIFICATION_FAILED` con routing key `ai.classification_failed`
+
+### Responsabilidades Actuales del Workflow
+
+- `ms_files` persiste la metadata del archivo y emite `FILE_UPLOADED`
+- `ms_ai_classifier` consume `FILE_UPLOADED`, lee el PDF desde el almacenamiento compartido, extrae transacciones candidatas, las normaliza, las clasifica con OpenAI Structured Outputs, guarda el job y emite eventos del workflow
+- `ms_transactions` consume `TRANSACTIONS_CLASSIFIED`, crea registros de transacciones, aplica idempotencia básica por job y secuencia, y emite `TRANSACTIONS_RECORDED`
+- `ms_notifications_cartera` consume `TRANSACTIONS_RECORDED` y `AI_CLASSIFICATION_FAILED`, guarda notificaciones orientadas al usuario y expone un stream SSE para el frontend
 
 ## Estructura de los Servicios y Patrón de Desarrollo
 
@@ -187,6 +201,13 @@ Esto mantiene las responsabilidades separadas y hace más fácil extender los se
 - `app/messaging`: consumer y publisher de RabbitMQ
 - `app/services`: extracción de PDF, clasificación con OpenAI y orquestación
 - `app/schemas`: contratos estrictos con Pydantic
+
+`ms_notifications_cartera` ahora incluye:
+
+- listeners de RabbitMQ para eventos del workflow
+- persistencia de notificaciones en PostgreSQL
+- emitters SSE por usuario para entrega en tiempo real
+- endpoints para listar notificaciones por usuario y marcarlas como leídas
 
 ## Automatización y Generación de Código
 
@@ -243,6 +264,13 @@ Para el clasificador de IA en particular:
 - monta el volumen compartido `files_data` en modo solo lectura para leer los PDFs almacenados por `ms_files`
 - requiere `OPENAI_API_KEY` para ejecutar clasificaciones reales
 
+Para notificaciones en particular:
+
+- `ms_notifications_cartera` se expone en `8111`
+- escucha eventos de completitud y error del workflow desde RabbitMQ
+- expone un endpoint SSE en `/notifications/stream?userId=<id>`
+- guarda notificaciones en su propio schema de PostgreSQL en lugar de depender de `public`
+
 ## Modelo de Configuración
 
 Los servicios dependen de variables de entorno para su configuración en runtime. Entre las más comunes están:
@@ -262,6 +290,8 @@ Los servicios dependen de variables de entorno para su configuración en runtime
 - `RABBITMQ_ROUTING_KEYS`
 - `FILES_BASE_PATH`
 - `OPENAI_MODEL`
+
+Algunos servicios Java también usan configuración de schema mediante `APP_DB_SCHEMA`, lo que ayuda a evitar problemas de permisos sobre volúmenes PostgreSQL ya reutilizados.
 
 Esto mantiene a los servicios portables entre desarrollo local y futuros entornos de despliegue.
 
@@ -283,6 +313,8 @@ Esto vuelve al repositorio adecuado para crecer de manera iterativa: se pueden a
 - El repositorio ya contiene la infraestructura central necesaria para desarrollo distribuido local
 - Varios servicios ya están listos para API o scaffolded para quedar listos rápidamente
 - `ms_ai_classifier` ya tiene un scaffold MVP para consumir RabbitMQ, extraer PDFs, clasificar con OpenAI Structured Outputs y persistir resultados en Postgres
+- `ms_transactions` ahora publica `TRANSACTIONS_RECORDED` luego de importar movimientos clasificados
+- `ms_notifications_cartera` ahora persiste notificaciones del workflow y las entrega a clientes mediante SSE
 - Los nombres de eventos compartidos ahora tienen un contrato a nivel repositorio en `contracts/events`
 - Algunos servicios referenciados en Docker Compose parecen formar parte del mapa de dominio planificado y todavía pueden requerir implementación dentro del repositorio
 - La arquitectura es intencionalmente modular para ampliar más adelante auth, autorización, coreografía por eventos, observabilidad y automatización de despliegue
