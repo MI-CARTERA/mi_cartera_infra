@@ -202,6 +202,7 @@ services:
       SPRING_DATASOURCE_URL: jdbc:postgresql://postgres:5432/ms_transactions
       SPRING_DATASOURCE_USERNAME: ms_transactions
       SPRING_DATASOURCE_PASSWORD: ms_transactions
+      APP_DB_SCHEMA: transactions
       SPRING_RABBITMQ_HOST: rabbitmq
       SPRING_RABBITMQ_PORT: 5672
       SPRING_RABBITMQ_USERNAME: ${RABBITMQ_USER}
@@ -366,9 +367,11 @@ services:
     ports:
       - "8111:8080"
     environment:
+      SPRING_PROFILES_ACTIVE: docker
       SPRING_DATASOURCE_URL: jdbc:postgresql://postgres:5432/ms_notifications_cartera
-      SPRING_DATASOURCE_USERNAME: ${POSTGRES_ROOT_USER}
-      SPRING_DATASOURCE_PASSWORD: ${POSTGRES_ROOT_PASS}
+      SPRING_DATASOURCE_USERNAME: ms_notifications_cartera
+      SPRING_DATASOURCE_PASSWORD: ms_notifications_cartera
+      APP_DB_SCHEMA: notifications
       SPRING_RABBITMQ_HOST: rabbitmq
       SPRING_RABBITMQ_PORT: 5672
       SPRING_RABBITMQ_USERNAME: ${RABBITMQ_USER}

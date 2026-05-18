@@ -55,6 +55,24 @@ events:
         - extraction_summary
         - classifier
 
+  - event_name: TRANSACTIONS_RECORDED
+    routing_key: transactions.recorded
+    producer: ms_transactions
+    consumers:
+      - ms_notifications_cartera
+    payload:
+      required:
+        - file_id
+        - user_id
+        - job_id
+        - imported_count
+        - review_required_count
+        - transaction_ids
+      optional:
+        - bank_account_id
+        - tenant_id
+        - message
+
   - event_name: AI_CLASSIFICATION_STARTED
     routing_key: ai.classification_started
     producer: ms_ai_classifier
